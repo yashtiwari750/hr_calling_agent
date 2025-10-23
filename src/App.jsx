@@ -532,7 +532,7 @@ export default function VapiVoiceCaller() {
       </div>
 
       <div style={styles.footer}>
-        Powered by Meta • Vapi AI Technology
+        Powered by Yash Tiwari
       </div>
 
       <style>{`
