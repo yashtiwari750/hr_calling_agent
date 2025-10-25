@@ -49,9 +49,9 @@ export default function VapiVoiceCaller() {
           call.id === updatedCall.id ? updatedCall : call
         )
       );
-      if (selectedCall?.id === updatedCall.id) {
-        setSelectedCall(updatedCall);
-      }
+      setSelectedCall((prevSelected) => 
+        prevSelected?.id === updatedCall.id ? updatedCall : prevSelected
+      );
     });
 
     socketRef.current.on('call:ended', (endedCall) => {
@@ -60,9 +60,9 @@ export default function VapiVoiceCaller() {
           call.id === endedCall.id ? endedCall : call
         )
       );
-      if (selectedCall?.id === endedCall.id) {
-        setSelectedCall(endedCall);
-      }
+      setSelectedCall((prevSelected) =>
+        prevSelected?.id === endedCall.id ? endedCall : prevSelected
+      );
     });
 
     socketRef.current.on('connect', () => {
@@ -79,7 +79,7 @@ export default function VapiVoiceCaller() {
         socketRef.current.disconnect();
       }
     };
-  }, [selectedCall]);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -192,9 +192,10 @@ export default function VapiVoiceCaller() {
 
       if (response.ok) {
         // Add the new call to the calls list
+        const callId = data.id || Date.now().toString();
         const newCall = {
-          id: data.id || Date.now().toString(),
-          callId: data.id,
+          id: callId,
+          callId: callId,
           customer: {
             number: formattedNumber
           },
@@ -620,7 +621,7 @@ export default function VapiVoiceCaller() {
               <CallHistory
                 calls={calls}
                 onSelectCall={setSelectedCall}
-                selectedCallId={selectedCall?.id}
+                selectedCallId={selectedCall?.callId}
               />
             )}
             
