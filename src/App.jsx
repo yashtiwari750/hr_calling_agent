@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Phone, Sparkles, Zap, CheckCircle, AlertCircle } from 'lucide-react';
+import { io } from 'socket.io-client';
+import CallHistory from './components/CallHistory';
+import CallDetails from './components/CallDetails';
 
 export default function VapiVoiceCaller() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [calls, setCalls] = useState([]);
+  const [selectedCall, setSelectedCall] = useState(null);
   const canvasRef = useRef(null);
+  const socketRef = useRef(null);
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -18,6 +24,62 @@ export default function VapiVoiceCaller() {
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
+
+  // WebSocket connection for real-time call updates
+  useEffect(() => {
+    const websocketUrl = import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:3000';
+    
+    // Initialize socket connection
+    socketRef.current = io(websocketUrl, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+    });
+
+    // Listen for call updates
+    socketRef.current.on('call:started', (call) => {
+      setCalls((prevCalls) => [call, ...prevCalls]);
+      setSelectedCall(call);
+    });
+
+    socketRef.current.on('call:updated', (updatedCall) => {
+      setCalls((prevCalls) =>
+        prevCalls.map((call) =>
+          call.id === updatedCall.id ? updatedCall : call
+        )
+      );
+      if (selectedCall?.id === updatedCall.id) {
+        setSelectedCall(updatedCall);
+      }
+    });
+
+    socketRef.current.on('call:ended', (endedCall) => {
+      setCalls((prevCalls) =>
+        prevCalls.map((call) =>
+          call.id === endedCall.id ? endedCall : call
+        )
+      );
+      if (selectedCall?.id === endedCall.id) {
+        setSelectedCall(endedCall);
+      }
+    });
+
+    socketRef.current.on('connect', () => {
+      console.log('WebSocket connected');
+    });
+
+    socketRef.current.on('disconnect', () => {
+      console.log('WebSocket disconnected');
+    });
+
+    // Cleanup on unmount
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, [selectedCall]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -129,6 +191,23 @@ export default function VapiVoiceCaller() {
       const data = await response.json();
 
       if (response.ok) {
+        // Add the new call to the calls list
+        const newCall = {
+          id: data.id || Date.now().toString(),
+          callId: data.id,
+          customer: {
+            number: formattedNumber
+          },
+          status: data.status || 'queued',
+          type: data.type || 'outbound',
+          startedAt: data.createdAt || new Date().toISOString(),
+          startTime: data.createdAt || new Date().toISOString(),
+          transcript: [],
+        };
+        
+        setCalls((prevCalls) => [newCall, ...prevCalls]);
+        setSelectedCall(newCall);
+        
         setStatus({
           type: 'success',
           message: 'Call initiated successfully! You should receive a call shortly.'
@@ -140,7 +219,7 @@ export default function VapiVoiceCaller() {
           message: data.message || 'Failed to initiate call. Please try again.'
         });
       }
-    } catch (error) {
+    } catch {
       setStatus({
         type: 'error',
         message: 'Network error. Please check your connection and try again.'
@@ -527,6 +606,25 @@ export default function VapiVoiceCaller() {
                 <p style={styles.featureSub}>{item.sub}</p>
               </div>
             ))}
+          </div>
+
+          {/* Call History and Details Section */}
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '2rem',
+            justifyContent: 'center',
+            marginTop: '2rem',
+          }}>
+            {calls.length > 0 && (
+              <CallHistory
+                calls={calls}
+                onSelectCall={setSelectedCall}
+                selectedCallId={selectedCall?.id}
+              />
+            )}
+            
+            <CallDetails call={selectedCall} />
           </div>
         </div>
       </div>
